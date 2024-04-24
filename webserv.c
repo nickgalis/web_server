@@ -6,6 +6,9 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <dirent.h>
+
+#define BACKLOG_QUEUE 10
+
 /*
 Socket is created
 accept() checks if there are any client requests on the listening socket socketfd
@@ -55,7 +58,7 @@ int handle_cgi_request(int clientfd) {
         close(clientfd);
 
         execve(argv[0], &argv[0], envp);
-        perror("execve");   // execve() only returns on error
+        perror("execve"); 
         exit(EXIT_FAILURE);
     } else {
         // This is the parent process
@@ -93,7 +96,7 @@ int main(int argc, const char *argv[])
     printf("Socket sucesfful bound to server\n"); 
 
 
-    if(listen(socketfd, 10) < 0) //Backlog queue 10 
+    if(listen(socketfd, BACKLOG_QUEUE) < 0) //Backlog queue 10 
         perror("Fail to set server to listen ");
     printf("Server listening for connections\n");
 
