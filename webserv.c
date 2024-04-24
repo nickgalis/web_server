@@ -22,6 +22,49 @@ char *parsehttp(char *http, char *me, char *ui, char *ver)
 
 }
 
+void get_dir_path(char* buffer, size_t len) {
+    char path[PATH_MAX];
+    ssize_t count = readlink("/proc/self/exe", path, PATH_MAX);
+    if (count != -1) {
+        dirname(path);
+        strncpy(buffer, path, len);
+    }
+}
+
+int handle_cgi_request(int clientfd) {
+    char path_to_script[PATH_MAX];
+    get_dir_path(path_to_script, PATH_MAX);
+    strncat(path_to_script, "/test.cgi", PATH_MAX - strlen(path_to_script) - 1);
+
+    char *argv[2];
+    char *envp[1];
+
+    argv[0] = path_to_script;
+    argv[1] = NULL;
+    envp[0] = NULL;
+
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("fork");
+        return -1;
+    }
+    if (pid == 0) {
+        // This is the child process
+        dup2(clientfd, STDOUT_FILENO);  // Redirect stdout to the client socket
+        close(clientfd);
+
+        execve(argv[0], &argv[0], envp);
+        perror("execve");   // execve() only returns on error
+        exit(EXIT_FAILURE);
+    } else {
+        // This is the parent process
+        waitpid(pid, NULL, 0);  // Wait for child process to finish
+    }
+
+    return 0;
+}
+
 int main(int argc, const char *argv[])
 {
     int portNum = atoi(argv[1]); //Receive port number  
