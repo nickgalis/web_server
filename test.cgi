@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/lib/python3
 
 print("Content-Type: text/html")  # HTML is following
 print()  # Blank line, end of headers
