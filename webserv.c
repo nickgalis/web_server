@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <dirent.h>
 /*
 Socket is created
 accept() checks if there are any client requests on the listening socket socketfd
@@ -12,6 +13,14 @@ accept() checks if there are any client requests on the listening socket socketf
 
 
 */
+
+char *parsehttp(char *http, char *me, char *ui, char *ver)
+{
+    char *httpHeader = strtok(http, "\r\n"); 
+    sscanf(httpHeader, "%s %s %s", me, ui, ver);  //method, uri, version 
+    return httpHeader; 
+
+}
 
 int main(int argc, const char *argv[])
 {
@@ -48,6 +57,8 @@ int main(int argc, const char *argv[])
     while(1){
         struct sockaddr_in cliAddr;
         socklen_t clilen = sizeof(cliAddr);
+        
+
         int clientfd = accept(socketfd, (struct sockaddr*) &cliAddr, &clilen); 
         if(clientfd < 0)
             perror("Error on accept"); 
@@ -57,12 +68,36 @@ int main(int argc, const char *argv[])
         //read from socket 
         int valread = read(clientfd, buffer, sizeof(buffer));
 
+        //printf("%s", buffer); 
+
+        //Parsing HTTP
+        char *parsedHTTP = parsehttp(buffer, method, uri, version);
+        
+        //Checking for specifics 
+        char fullpath [200];
+        sprintf(fullpath, ".%s", uri); 
+        printf("%s\n", fullpath);
+
+        DIR *dir = opendir(fullpath); 
+        if(dir == NULL){
+            perror("Fail file does not exist"); 
+            return 1; 
+        }
+        struct dirent* entity; 
+        entity = readdir(dir); 
+
+        while(entity != NULL)
+        {
+            printf("%s\n",entity->d_name); 
+            entity = readdir(dir); 
+        } 
+
 
 
         if(valread < 0)
             perror("Error (read)"); 
         
-        printf("%s", buffer);
+      
         
         char response [] = "HTTP/1.1 200 OK\r\n"
                             "Content-Type: text/html; charset=UTF-8\r\n"
