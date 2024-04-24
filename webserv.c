@@ -62,53 +62,58 @@ int main(int argc, const char *argv[])
         int clientfd = accept(socketfd, (struct sockaddr*) &cliAddr, &clilen); 
         if(clientfd < 0)
             perror("Error on accept"); 
-        
-        printf("Connection accepted\n"); 
-        printf("Connected to Client at %s %d\n", inet_ntoa(cliAddr.sin_addr), ntohs(cliAddr.sin_port)); 
-        //read from socket 
-        int valread = read(clientfd, buffer, sizeof(buffer));
 
-        //printf("%s", buffer); 
+        pid_t pid = fork(); 
 
-        //Parsing HTTP
-        char *parsedHTTP = parsehttp(buffer, method, uri, version);
-        
-        //Checking for specifics 
-        char fullpath [200];
-        sprintf(fullpath, ".%s", uri); 
-        printf("%s\n", fullpath);
-
-        DIR *dir = opendir(fullpath); 
-        if(dir == NULL){
-            perror("Fail file does not exist"); 
-            return 1; 
-        }
-        struct dirent* entity; 
-        entity = readdir(dir); 
-
-        while(entity != NULL)
+        if(pid == 0)//Child process
         {
-            printf("%s\n",entity->d_name); 
+            close(socketfd);
+            int valread = read(clientfd, buffer, sizeof(buffer)); 
+            if(valread < 0)
+                perror("Error (read)"); 
+            printf("Connection accepted\n"); 
+            printf("Connected to Client at %s %d\n", inet_ntoa(cliAddr.sin_addr), ntohs(cliAddr.sin_port));
+            //Parsing HTTP
+            char *parsedHTTP = parsehttp(buffer, method, uri, version);
+
+            //Checking for specifics 
+            char fullpath [200];
+            sprintf(fullpath, ".%s", uri); 
+            printf("%s\n", fullpath);
+
+            DIR *dir = opendir(fullpath); 
+            if(dir == NULL){
+                perror("Fail file does not exist"); 
+                return 1; 
+            }
+            struct dirent* entity; 
             entity = readdir(dir); 
-        } 
 
+            while(entity != NULL)
+            {
+                printf("%s\n",entity->d_name); 
+                entity = readdir(dir); 
+            } 
+            /*
+            char response [] = "HTTP/1.1 200 OK\r\n"
+                                "Content-Type: text/html; charset=UTF-8\r\n"
+                                "Content-Length: 13\r\n"
+                                "\r\n"
+                                "Hello, World!";*/
 
+            char response [] = "HTTP/1.1 200 OK\r\n"
+                                "Content-Type: text/html; charset=UTF-8\r\n"
+                                "\r\n"
+                                "Hello this is anamu and I like to";
+            
 
-        if(valread < 0)
-            perror("Error (read)"); 
+            write(clientfd, response, strlen(response)-1);
+            sleep(10); 
+            close(clientfd);
+            exit(0); 
+        }
         
-      
         
-        char response [] = "HTTP/1.1 200 OK\r\n"
-                            "Content-Type: text/html; charset=UTF-8\r\n"
-                            "Content-Length: 13\r\n"
-                            "\r\n"
-                            "Hello, World!";
-        
-
-        write(clientfd, response, strlen(response)-1);
-        sleep(10); 
-        close(clientfd);
 
     }
 
