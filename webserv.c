@@ -48,8 +48,22 @@ void execute_CGI_script(int clientfd, char* uri) {
         perror("exec");
         exit(0);
     }
+    else if(pid > 0)    //Parent Process
+    {
+        close(pipefd[1]);
+        wait(NULL);
 
-        
+        // read the output of the child process (script) from the pipe
+        read(pipefd[0], script_output, sizeof(script_output));
+
+        // create the HTTP response
+        char headerResponse[MAX_BUF_SIZE] = {0};
+        sprintf(headerResponse, "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Length: %ld\r\n\r\n", strlen(script_output));
+        // Write HTTP headers
+        write(clientfd, headerResponse, strlen(headerResponse));
+        // Write output
+        write(clientfd, script_output, strlen(script_output));
+    }
     else    //Failed to fork
     {
         perror("fork");
