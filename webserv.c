@@ -22,6 +22,7 @@ void parsehttp(char *http, char *me, char *ui, char *ver)
     char *httpHeader = strtok(http, "\r\n");
     sscanf(httpHeader, "%s %s %s", me, ui, ver);  //method, uri, version
 }
+
 void execute_CGI_script(int clientfd, char* uri) {
     int pipefd[2];
     char script_output[1024];
