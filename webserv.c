@@ -166,13 +166,24 @@ using command chmod +x
 void execute_CGI_script(int clientfd, char* fullpath) {
     int pathNotFound = 0; 
     int pipefd[2];
+    int statuscode[2]; 
+    //char notValid [2]; //Checks for validity of the file (set to 0 if not valid set to 1 if valid)
+    //fd[0] - read / fd[1] - write
+    char notValid [2];
+
     char script_output[MAX_BUF_SIZE];
-    memset(script_output, 0, sizeof script_output);
+    memset(script_output, 0, sizeof(script_output));
+
 
     // Create pipe
     if (pipe(pipefd) == -1) {
         perror("pipe");
         return;
+    }
+    if(pipe(statuscode) == -1)
+    {
+        perror("pipe");
+        return; 
     }
 
     pid_t pid = fork();
@@ -181,37 +192,50 @@ void execute_CGI_script(int clientfd, char* fullpath) {
         // Redirect stdout to the pipe
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[0]);
+        close(statuscode[0]); 
 
         //Error mapping the CGI file 
         if(execl(fullpath, fullpath, NULL) == -1)
         {
-            pathNotFound = -1; 
             char notFound [] = "HTTP/1.1 404 Not Found\r\n"
                                 "Content-Type: text/html; charset=UTF-8\r\n"
                                 "\r\n"
                                 "<h1>404 CGI Script Not Found</h1>";
             
             write(clientfd, notFound, strlen(notFound)); 
+            write(statuscode[1], "0", 1); 
         }
+        else
+        {
+            write(statuscode[1], "1", 1);
+        }
+        
         exit(0);
     }
-    else if(pid > 0)    //Parent Process
+    else if(pid > 0)    //Parent Process d
     {
-        close(pipefd[1]);
         wait(NULL); //Force Child process to execute first 
 
-        if(pathNotFound != -1)// read the output of the child process (script) from the pipe
+        close(pipefd[1]);
+        close(statuscode[1]); 
+
+        read(statuscode[0], notValid, sizeof(notValid));
+
+       if(notValid[0] != '0') // (-1) Failed status code (1) success status code
         {
             read(pipefd[0], script_output, sizeof(script_output));
             // create the HTTP response
             char headerResponse[MAX_BUF_SIZE] = {0};
             sprintf(headerResponse, "HTTP/1.1 200 OK\r\n");
-            printf("%d", pathNotFound); 
             // Write HTTP headers
             write(clientfd, headerResponse, strlen(headerResponse));
             // Write output
             write(clientfd, script_output, strlen(script_output));
         }
+
+        close(pipefd[0]); 
+        close(statuscode[0]); 
+        
     }
     else    //Failed to fork
     {
