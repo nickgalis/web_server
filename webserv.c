@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
-#include <netinet/in.h> //For internet domain address 
+#include <netinet/in.h> //For internet domain address
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -14,67 +14,75 @@
 /*
 Socket is created
 accept() checks if there are any client requests on the listening socket socketfd
-    If request exists, accept() will take the request and return new socket to communicate with client 
+    If request exists, accept() will take the request and return new socket to communicate with client
 
 
 */
 
-void parsehttp(char *http, char *me, char *ui, char *ver)
+void parsehttp(char *http, char *me, char *ui, char *queryString, char *ver)
 {
-    char *httpHeader = strtok(http, "\r\n"); 
-    sscanf(httpHeader, "%s %s %s", me, ui, ver);  //method, uri, version 
+    char *httpHeader = strtok(http, "\r\n");
+    sscanf(httpHeader, "%s %s %s", me, ui, ver);  //method, uri, version
+
+    // Parse queryString from uri
+    char *param = strchr(ui, '?');
+    if(param) {
+        *param = '\0';  // split uri and parameters
+        strcpy(queryString, param + 1);  // copy parameters to queryString
+    }
 }
 
-//Function to list Directory 
+
+//Function to list Directory
 void requestrDirLst(int clientFD, char *ui)
 {
 
     char fullpath [MAX_BUF_SIZE];
-    sprintf(fullpath, ".%s", ui); 
+    sprintf(fullpath, ".%s", ui);
 
-    DIR *dir = opendir(fullpath); 
+    DIR *dir = opendir(fullpath);
 
-    //404 Error code: Directory does not exist 
+    //404 Error code: Directory does not exist
     if(dir == NULL){
         char notFound [] = "HTTP/1.1 404 Not Found\r\n"
-                            "Content-Type: text/html; charset=UTF-8\r\n"
-                            "\r\n"
-                            "<h1>404 Directory Not Found</h1>";
+                           "Content-Type: text/html; charset=UTF-8\r\n"
+                           "\r\n"
+                           "<h1>404 Directory Not Found</h1>";
 
-        write(clientFD, notFound, strlen(notFound)); 
+        write(clientFD, notFound, strlen(notFound));
     }
 
-    struct dirent* entity; 
-    entity = readdir(dir); 
+    struct dirent* entity;
+    entity = readdir(dir);
 
-    //HTTP Header Request 
+    //HTTP Header Request
     char hdRequest [] = "HTTP/1.1 200 OK\r\n"
                         "Content-Type: text/html; charset=UTF-8\r\n"
                         "\r\n";
     write(clientFD, hdRequest, strlen(hdRequest));
 
-    //Header for Webserver 
-    char title [] = "<h1>Directory Listing</h1>"; 
-    write(clientFD, title, strlen(title)); 
-          
-    
+    //Header for Webserver
+    char title [] = "<h1>Directory Listing</h1>";
+    write(clientFD, title, strlen(title));
+
+
 //**** Start HTML Document
-    char *starthtml = "<html><head><title>Directory Listing</title></head><body><ul>"; 
-    write(clientFD, starthtml, strlen(starthtml)); 
+    char *starthtml = "<html><head><title>Directory Listing</title></head><body><ul>";
+    write(clientFD, starthtml, strlen(starthtml));
 
 
     while(entity != NULL)
     {
-        char lstBuff [MAX_BUF_SIZE]; 
-        snprintf(lstBuff, sizeof(lstBuff), "<li>%s</li>",entity->d_name); 
+        char lstBuff [MAX_BUF_SIZE];
+        snprintf(lstBuff, sizeof(lstBuff), "<li>%s</li>",entity->d_name);
         write(clientFD, lstBuff, strlen(lstBuff));
-        entity = readdir(dir); 
-    } 
+        entity = readdir(dir);
+    }
 
 //**** END HTML DOCUMENT
-    char *html_end = "</ul></body></html>"; 
-    write(clientFD, html_end, strlen(html_end)); 
-    
+    char *html_end = "</ul></body></html>";
+    write(clientFD, html_end, strlen(html_end));
+
 }
 
 long get_file_size(FILE* file) {
@@ -88,14 +96,14 @@ long get_file_size(FILE* file) {
 void handle_image_request(int clientfd, const char* file_path, const char* mime_type) {
     FILE* image_file = fopen(file_path, "rb");  // Open image file in binary mode
     if (image_file == NULL) {
-        char notFound [MAX_BUF_SIZE]; 
-        
+        char notFound [MAX_BUF_SIZE];
+
         strcpy(notFound,"HTTP/1.1 404 Not Found\r\n"
                         "Content-Type: text/html; charset=UTF-8\r\n"
                         "\r\n"
                         "<h1>404 Image Not Found</h1>");
-       
-        write(clientfd, notFound, strlen(notFound)); 
+
+        write(clientfd, notFound, strlen(notFound));
         return;
     }
 
@@ -122,57 +130,96 @@ void handle_image_request(int clientfd, const char* file_path, const char* mime_
     fclose(image_file);
 }
 
-//Request HTML File 
+//Request HTML File
 void requestHTML(int clientfd, char *path)
 {
     FILE *file = fopen(path, "r");  //Open with read permissions
     if(file == NULL)
     {
         char notFound [] = "HTTP/1.1 404 Not Found\r\n"
-                            "Content-Type: text/html; charset=UTF-8\r\n"
-                            "\r\n"
-                            "<h1>404 HTML FIle Not Found</h1>";
-        write(clientfd, notFound, strlen(notFound)); 
+                           "Content-Type: text/html; charset=UTF-8\r\n"
+                           "\r\n"
+                           "<h1>404 HTML FIle Not Found</h1>";
+        write(clientfd, notFound, strlen(notFound));
     }
 
-    //Getting file size 
-    int fileSize = get_file_size(file); 
+    //Getting file size
+    int fileSize = get_file_size(file);
 
     //Allocate memory for htmlData
     char *htmlData = (char *)malloc(fileSize);
 
-    //Copying file data to htmlData 
+    //Copying file data to htmlData
     fread(htmlData, 1,fileSize, file);
 
     //sprintf for formatted output
-    char headerResponse [MAX_BUF_SIZE]; 
+    char headerResponse [MAX_BUF_SIZE];
     sprintf(headerResponse, "HTTP/1.1 200 OK\r\n"
                             "Content-Type: text/html; charset=UTF-8\r\n"
-                            "Content-Length: %d\r\n\r\n", fileSize); 
+                            "Content-Length: %d\r\n\r\n", fileSize);
 
     write(clientfd, headerResponse, strlen(headerResponse));
-    write(clientfd, htmlData, strlen(htmlData)); 
+    write(clientfd, htmlData, strlen(htmlData));
 
-    free(htmlData); 
+    free(htmlData);
     //Closing file
-    fclose(file); 
+    fclose(file);
 }
 
 /*
-Please make sure that the cgi file is exectuable 
-using command chmod +x 
+Please make sure that the cgi file is exectuable
+using command chmod +x
 */
 
-void execute_CGI_script(int clientfd, char* fullpath) {
-    int pathNotFound = 0; 
+char* get_query_param(const char* queryString, const char* key) {
+    char* query = strdup(queryString);
+
+    char* token = strtok(query, "&");
+    while(token) {
+        char* delimiter = strchr(token, '=');
+        if(delimiter) {
+            *delimiter = '\0';  // split key and value
+            if(strcmp(token, key) == 0) {
+                char* value = strdup(delimiter + 1);
+                free(query);
+                return value;  // return duplicated value
+            }
+        }
+        token = strtok(NULL, "&");
+    }
+
+    free(query);
+    return NULL;
+}
+
+
+void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
     int pipefd[2];
-    int statuscode[2]; 
+    int statuscode[2];
     //char notValid [2]; //Checks for validity of the file (set to 0 if not valid set to 1 if valid)
     //fd[0] - read / fd[1] - write
     char notValid [2];
 
     char script_output[MAX_BUF_SIZE];
     memset(script_output, 0, sizeof(script_output));
+
+    FILE* file = fopen(fullpath, "r");
+    if (!file) {
+        perror("fopen");
+        return;
+    }
+    char line[1024];
+    int contains_my_histogram = 0;
+
+
+    while ( fgets ( line, 200, file ) != NULL ) {
+        if(strstr(line,"my-histogram")) {
+            contains_my_histogram = 1; /* write the line */
+            break;
+        }
+    }
+
+    fclose ( file);
 
 
     // Create pipe
@@ -183,7 +230,7 @@ void execute_CGI_script(int clientfd, char* fullpath) {
     if(pipe(statuscode) == -1)
     {
         perror("pipe");
-        return; 
+        return;
     }
 
     pid_t pid = fork();
@@ -192,36 +239,50 @@ void execute_CGI_script(int clientfd, char* fullpath) {
         // Redirect stdout to the pipe
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[0]);
-        close(statuscode[0]); 
+        close(statuscode[0]);
 
-        //Error mapping the CGI file 
-        if(execl(fullpath, fullpath, NULL) == -1)
+        char* directory = get_query_param(queryString, "directory");
+        if(directory && contains_my_histogram) {
+            char *args[] = {"./my-histogram", directory, NULL};
+            if(execv(args[0], args) == -1) {
+                char notFound [] = "HTTP/1.1 404 Not Found\r\n"
+                                   "Content-Type: text/html; charset=UTF-8\r\n"
+                                   "\r\n"
+                                   "<h1>404 CGI Script Not Found</h1>";
+
+                write(clientfd, notFound, strlen(notFound));
+                write(statuscode[1], "0", 1);
+            }
+            free(directory);
+        }
+
+        else if(execl(fullpath, fullpath, NULL) == -1)
         {
             char notFound [] = "HTTP/1.1 404 Not Found\r\n"
-                                "Content-Type: text/html; charset=UTF-8\r\n"
-                                "\r\n"
-                                "<h1>404 CGI Script Not Found</h1>";
-            
-            write(clientfd, notFound, strlen(notFound)); 
-            write(statuscode[1], "0", 1); 
+                               "Content-Type: text/html; charset=UTF-8\r\n"
+                               "\r\n"
+                               "<h1>404 CGI Script Not Found</h1>";
+
+            write(clientfd, notFound, strlen(notFound));
+            write(statuscode[1], "0", 1);
         }
         else
         {
             write(statuscode[1], "1", 1);
         }
-        
+
         exit(0);
     }
     else if(pid > 0)    //Parent Process d
     {
-        wait(NULL); //Force Child process to execute first 
+        wait(NULL); //Force Child process to execute first
 
         close(pipefd[1]);
-        close(statuscode[1]); 
+        close(statuscode[1]);
 
         read(statuscode[0], notValid, sizeof(notValid));
 
-       if(notValid[0] != '0') // (-1) Failed status code (1) success status code
+        if(notValid[0] != '0') // (-1) Failed status code (1) success status code
         {
             read(pipefd[0], script_output, sizeof(script_output));
             // create the HTTP response
@@ -233,9 +294,17 @@ void execute_CGI_script(int clientfd, char* fullpath) {
             write(clientfd, script_output, strlen(script_output));
         }
 
-        close(pipefd[0]); 
-        close(statuscode[0]); 
-        
+        // After the CGI script process finished, handle the output image file it created
+        if(contains_my_histogram && notValid[0] != '0') {
+            char image_path[MAX_BUF_SIZE];
+            strcpy(image_path, "./histogram.jpeg");
+            handle_image_request(clientfd, image_path, "image/jpeg");
+        }
+
+
+        close(pipefd[0]);
+        close(statuscode[0]);
+
     }
     else    //Failed to fork
     {
@@ -247,63 +316,61 @@ void execute_CGI_script(int clientfd, char* fullpath) {
 
 
 
-
-
-
 int main(int argc, const char *argv[])
 {
-    int portNum = atoi(argv[1]); //Receive port number  
-    char buffer [MAX_BUF_SIZE]; 
+    int portNum = atoi(argv[1]); //Receive port number
+    char buffer [MAX_BUF_SIZE];
 
-    char method[10]; //GET, POST, PUT
-    char uri[25]; //The resource client wants to interact with 
-    char version[10]; //Version of http  d
+    char method[100]; //GET, POST, PUT
+    char uri[250]; //The resource client wants to interact with
+    char version[100]; //Version of http  d
 
     struct sockaddr_in serverAddr; //Instance of sockaddr_in
     socklen_t lenServerAddr = sizeof(serverAddr); //Size of serverAddr
-    
+
     int socketfd = socket(AF_INET, SOCK_STREAM, 0); //Internet socket w/h file like attributes read and write SockStream(TCP)
     if(socketfd < 0)
-        perror("Fail to create socket"); 
-    
-    //CREATING SERVER IPv4 
+        perror("Fail to create socket");
+
+    //CREATING SERVER IPv4
     bzero(&serverAddr, sizeof(serverAddr));
-    serverAddr.sin_family = AF_INET; //IPv4 address 
-    serverAddr.sin_port = htons(portNum);  //IP Port 
+    serverAddr.sin_family = AF_INET; //IPv4 address
+    serverAddr.sin_port = htons(portNum);  //IP Port
     serverAddr.sin_addr.s_addr = htonl(INADDR_ANY); //IP Address
 
     //Bind socket to IP address
     if(bind(socketfd, (struct sockaddr*)&serverAddr, lenServerAddr) < 0)
-        perror("Fail to bind socket"); 
-    printf("Socket sucesfful bound to server\n"); 
+        perror("Fail to bind socket");
+    printf("Socket sucesfful bound to server\n");
 
 
-    if(listen(socketfd, 10) < 0) //Backlog queue 10 
+    if(listen(socketfd, 1000) < 0) //Backlog queue 10
         perror("Fail to set server to listen ");
     printf("Server listening for connections\n");
 
     while(1){
         struct sockaddr_in cliAddr;
         socklen_t clilen = sizeof(cliAddr);
-        
 
-        int clientfd = accept(socketfd, (struct sockaddr*) &cliAddr, &clilen); 
+
+        int clientfd = accept(socketfd, (struct sockaddr*) &cliAddr, &clilen);
         if(clientfd < 0)
-            perror("Error on accept"); 
+            perror("Error on accept");
 
-        pid_t pid = fork(); 
+        pid_t pid = fork();
 
         if(pid == 0)//Child process
         {
             close(socketfd);
-            int valread = read(clientfd, buffer, sizeof(buffer)); 
+            int valread = read(clientfd, buffer, sizeof(buffer));
             if(valread < 0)
-                perror("Error (read)"); 
-            printf("Connection accepted\n"); 
+                perror("Error (read)");
+            printf("Connection accepted\n");
             printf("Connected to Client at %s %d\n", inet_ntoa(cliAddr.sin_addr), ntohs(cliAddr.sin_port));
 
+            char queryString[256] = {0};
             //Parsing HTTP
-            parsehttp(buffer, method, uri, version); //Method, uri, version: will be intialized (GET /Request /HTTP1.1)
+            parsehttp(buffer, method, uri, queryString, version); //Method, uri, version: will be intialized (GET /Request /HTTP1.1)
 
             //If the str not contain a . (Meaning its a directory)
             if(strchr(uri, '.') == NULL)
@@ -322,33 +389,28 @@ int main(int argc, const char *argv[])
                 }
                 else if(strstr(uri, ".html") != NULL)
                 {
-                    char file_path[MAX_BUF_SIZE]; 
-                    sprintf(file_path, ".%s", uri); 
-                    requestHTML(clientfd, file_path); 
+                    char file_path[MAX_BUF_SIZE];
+                    sprintf(file_path, ".%s", uri);
+                    requestHTML(clientfd, file_path);
                 }
                 else if(strstr(uri, ".cgi") != NULL)
                 {
-                    char file_path[MAX_BUF_SIZE]; 
+                    char file_path[MAX_BUF_SIZE];
                     sprintf(file_path, ".%s", uri);  // Assuming the uri is a path relative to the current directory
-                    execute_CGI_script(clientfd, file_path); 
+                    execute_CGI_script(clientfd, file_path, queryString);
                 }
             }
 
-            
-            close(clientfd); //Have to close clientfd 
-            exit(0); 
+
+            close(clientfd); //Have to close clientfd
+            exit(0);
         }
-        
-        
+
+
 
     }
 
-
-
-
-
-
-    return 0; 
+    return 0;
 }
 
 
