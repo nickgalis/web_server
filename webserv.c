@@ -296,9 +296,16 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
 
         // After the CGI script process finished, handle the output image file it created
         if(contains_my_histogram && notValid[0] != '0') {
-            char image_path[MAX_BUF_SIZE];
-            strcpy(image_path, "./histogram.jpeg");
-            handle_image_request(clientfd, image_path, "image/jpeg");
+            pid_t pid2 = vfork();
+            if(pid2 == 0) {
+                dup2(clientfd, STDOUT_FILENO);
+                execl("/usr/bin/python3", "/usr/bin/python3", "./pretty_print.cgi", NULL);
+                _exit(0);
+            } else if (pid2 > 0) {
+                wait(NULL);
+            } else {
+                perror("vfork");
+            }
         }
 
 
