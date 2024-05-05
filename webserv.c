@@ -7,6 +7,8 @@
 #include <arpa/inet.h>
 #include <dirent.h>
 #include <sys/wait.h>
+#include "cache.h"
+
 
 
 #define MAX_BUF_SIZE 512 //d_name 256 so had to do 512
@@ -18,6 +20,9 @@ accept() checks if there are any client requests on the listening socket socketf
 
 
 */
+int with_caching = 0; // Default no caching
+Cache* cache; // Cache variable
+
 
 void parsehttp(char *http, char *me, char *ui, char *queryString, char *ver)
 {
@@ -94,15 +99,30 @@ long get_file_size(FILE* file) {
 
 // Function to handle static image request
 void handle_image_request(int clientfd, const char* file_path, const char* mime_type) {
-    FILE* image_file = fopen(file_path, "rb");  // Open image file in binary mode
+    Node* cachedNode = NULL;
+    if (with_caching) {
+        cachedNode = search_cache(file_path, cache);
+        if (cachedNode != NULL) {
+            // Prepare HTTP response headers
+            char headerResponse[MAX_BUF_SIZE] = {0};
+            sprintf(headerResponse, "HTTP/1.1 200 OK\r\nContent-Type: %s; charset=UTF-8\r\nContent-Length: %ld\r\n\r\n", mime_type, cachedNode->data_size);
+
+            // Write HTTP headers
+            write(clientfd, headerResponse, strlen(headerResponse));
+
+            // Write binary data of image from cache
+            write(clientfd, cachedNode->value, cachedNode->data_size);
+            return;
+        }
+    }
+
+    FILE* image_file = fopen(file_path, "rb"); // Open image file in binary mode
     if (image_file == NULL) {
         char notFound [MAX_BUF_SIZE];
-
         strcpy(notFound,"HTTP/1.1 404 Not Found\r\n"
                         "Content-Type: text/html; charset=UTF-8\r\n"
                         "\r\n"
                         "<h1>404 Image Not Found</h1>");
-
         write(clientfd, notFound, strlen(notFound));
         return;
     }
@@ -126,21 +146,34 @@ void handle_image_request(int clientfd, const char* file_path, const char* mime_
     // Write binary data of image
     write(clientfd, image_data, file_size);
 
+    if (with_caching) {
+        add_to_cache(file_path, image_data, file_size, cache);
+    }
+
     free(image_data);
     fclose(image_file);
 }
 
+
 //Request HTML File
-void requestHTML(int clientfd, char *path)
-{
+void requestHTML(int clientfd, char *path) {
+    Node* cachedNode = NULL;
+    if (with_caching) {
+        cachedNode = search_cache(path, cache);
+        if (cachedNode != NULL) {
+            write(clientfd, cachedNode->value, cachedNode->data_size);
+            return;
+        }
+    }
+
     FILE *file = fopen(path, "r");  //Open with read permissions
-    if(file == NULL)
-    {
+    if(file == NULL) {
         char notFound [] = "HTTP/1.1 404 Not Found\r\n"
                            "Content-Type: text/html; charset=UTF-8\r\n"
                            "\r\n"
-                           "<h1>404 HTML FIle Not Found</h1>";
+                           "<h1>404 HTML File Not Found</h1>";
         write(clientfd, notFound, strlen(notFound));
+        return;
     }
 
     //Getting file size
@@ -150,7 +183,7 @@ void requestHTML(int clientfd, char *path)
     char *htmlData = (char *)malloc(fileSize);
 
     //Copying file data to htmlData
-    fread(htmlData, 1,fileSize, file);
+    fread(htmlData, 1, fileSize, file);
 
     //sprintf for formatted output
     char headerResponse [MAX_BUF_SIZE];
@@ -160,6 +193,10 @@ void requestHTML(int clientfd, char *path)
 
     write(clientfd, headerResponse, strlen(headerResponse));
     write(clientfd, htmlData, strlen(htmlData));
+
+    if (with_caching) {
+        add_to_cache(path, htmlData, fileSize, cache);
+    }
 
     free(htmlData);
     //Closing file
@@ -320,12 +357,41 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
     }
 }
 
-
-
-
-int main(int argc, const char *argv[])
+int main(int argc, char *argv[])
 {
-    int portNum = atoi(argv[1]); //Receive port number
+    with_caching = 0; //default to no caching
+    int option;
+
+    if(argc < 2) {
+        printf("Port number missing.\n");
+        return 1;
+    }
+
+    int portNum = atoi(argv[1]);
+
+    while((option = getopt(argc, argv, "c")) != -1) {
+        switch(option) {
+            case 'c': // When -c is provided
+                with_caching = 1; // Turn on caching
+                break;
+            default: // When an unknown option is provided
+                printf("Unknown option: %c\n", option);
+                return 1;
+        }
+    }
+
+    // Check if port number is provided as first non-option argument
+    if (optind < argc) {
+        portNum = atoi(argv[optind]);
+    }
+
+
+    // Initialize cache if caching is enabled
+    if (with_caching) {
+        cache = new_cache(1024 * 1024);
+    }
+
+
     char buffer [MAX_BUF_SIZE];
 
     char method[100]; //GET, POST, PUT
