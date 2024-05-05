@@ -436,7 +436,7 @@ int main(int argc, char *argv[])
             parsehttp(buffer, method, uri, queryString, version); //Method, uri, version: will be intialized (GET /Request /HTTP1.1)
 
             //If the str not contain a . (Meaning its a directory)
-            if((strchr(uri, '.') == NULL) && ststr(uri, "my-histogram") == NULL)
+            if((strchr(uri, '.') == NULL) && strstr(uri, "my-histogram") == NULL)
                 requestrDirLst(clientfd, uri); //Sending (/response)
             else
             {
