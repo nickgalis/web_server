@@ -79,7 +79,7 @@ Node* search_cache(const char* key, Cache* cache) {
         }
         current = current->next;
     }
-    return NULL;  // Return NULL if not found
+    return NULL; 
 }
 
 
