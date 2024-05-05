@@ -1,16 +1,21 @@
-all: webserv my-histogram
 
-webserv.o: webserv.c
-	gcc -c webserv.c 
+CFLAGS = -g -Wall               
+
+all: webserv my-histogram
 
 my-histogram.o: my-histogram.c
 	gcc -c my-histogram.c
 
-webserv: webserv.o
-	gcc -o webserv webserv.o
-
 my-histogram: my-histogram.o
 	gcc -o my-histogram my-histogram.o
 
+webserv: cache.o webserv.c             # 'webserv' depends on 'cache.o' and 'webserv.c'
+	gcc $(CFLAGS) -o webserv cache.o webserv.c
+
+cache.o: cache.c cache.h              # 'cache.o' depends on 'cache.c' and 'cache.h'
+	gcc $(CFLAGS) -c cache.c
+
+
+
 clean:
-	rm -f *.o webserv my-histogram output.txt histogram.jpeg
+	rm -rf *.o webserv my-histogram output.txt histogram.jpeg
