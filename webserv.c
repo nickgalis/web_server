@@ -232,37 +232,52 @@ char* get_query_param(const char* queryString, const char* key) {
 }
 
 
+void execute_my_histogram(int clientfd, char* queryString) {
+    int pipefd[2];
+    pipe(pipefd); // Create a pipe for communication between my-histogram and pretty_print.cgi
+
+    // First fork to run the my-histogram program
+    pid_t pid1 = fork();
+    if(pid1 == 0) {
+        // Child process
+        close(pipefd[0]); // Close unused read end
+        dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to pipe
+
+        char* directory = get_query_param(queryString, "directory");
+        execl("./my-histogram", "./my-histogram", directory, (char *) NULL);
+        // If execl returns at all, an error occurred.
+        perror("execl");
+        _exit(1);
+    }
+
+    // Second fork to run the pretty_print.cgi program
+    pid_t pid2 = fork();
+    if(pid2 == 0) {
+        // Child process
+        close(pipefd[1]); // Close unused write end
+        dup2(pipefd[0], STDIN_FILENO); // Redirect stdin to pipe
+        dup2(clientfd, STDOUT_FILENO); // Redirect stdout to clientfd
+
+        execl("/usr/bin/python3", "/usr/bin/python3", "./pretty_print.cgi", NULL);
+        // If execl returns at all, an error occurred.
+        perror("execl");
+        _exit(1);
+    }
+
+    // Parent process - close unused file descriptors and wait for children
+    close(pipefd[0]);
+    close(pipefd[1]);
+    waitpid(pid1, NULL, 0); // Wait for first child to finish
+    waitpid(pid2, NULL, 0); // Wait for second child to finish
+}
+
 void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
     int pipefd[2];
     int statuscode[2];
-    //char notValid [2]; //Checks for validity of the file (set to 0 if not valid set to 1 if valid)
-    //fd[0] - read / fd[1] - write
-    char notValid [2];
+    char notValid[0];
 
     char script_output[MAX_BUF_SIZE];
     memset(script_output, 0, sizeof(script_output));
-
-    FILE* file = fopen(fullpath, "r");
-    if (!file) {
-         char notFound [] = "HTTP/1.1 404 Not Found\r\n"
-                           "Content-Type: text/html; charset=UTF-8\r\n"
-                           "\r\n"
-                           "<h1>404 CGI File Not Found</h1>";
-        write(clientfd, notFound, strlen(notFound));
-    }
-    char line[1024];
-    int contains_my_histogram = 0;
-
-
-    while ( fgets ( line, 200, file ) != NULL ) {
-        if(strstr(line,"my-histogram")) {
-            contains_my_histogram = 1; /* write the line */
-            break;
-        }
-    }
-
-    fclose ( file);
-
 
     // Create pipe
     if (pipe(pipefd) == -1) {
@@ -283,22 +298,7 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
         close(pipefd[0]);
         close(statuscode[0]);
 
-        char* directory = get_query_param(queryString, "directory");
-        if(directory && contains_my_histogram) {
-            char *args[] = {"./my-histogram", directory, NULL};
-            if(execv(args[0], args) == -1) {
-                char notFound [] = "HTTP/1.1 404 Not Found\r\n"
-                                   "Content-Type: text/html; charset=UTF-8\r\n"
-                                   "\r\n"
-                                   "<h1>404 CGI Script Not Found</h1>";
-
-                write(clientfd, notFound, strlen(notFound));
-                write(statuscode[1], "0", 1);
-            }
-            free(directory);
-        }
-
-        else if(execl(fullpath, fullpath, NULL) == -1)
+        if(execl(fullpath, fullpath, NULL) == -1)
         {
             char notFound [] = "HTTP/1.1 404 Not Found\r\n"
                                "Content-Type: text/html; charset=UTF-8\r\n"
@@ -315,7 +315,7 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
 
         exit(0);
     }
-    else if(pid > 0)    //Parent Process d
+    else if(pid > 0)    //Parent Process
     {
         wait(NULL); //Force Child process to execute first
 
@@ -336,24 +336,9 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
             write(clientfd, script_output, strlen(script_output));
         }
 
-        // After the CGI script process finished, handle the output image file it created
-        if(contains_my_histogram && notValid[0] != '0') {
-            pid_t pid2 = vfork();
-            if(pid2 == 0) {
-                dup2(clientfd, STDOUT_FILENO);
-                execl("/usr/bin/python3", "/usr/bin/python3", "./pretty_print.cgi", NULL);
-                _exit(0);
-            } else if (pid2 > 0) {
-                wait(NULL);
-            } else {
-                perror("vfork");
-            }
-        }
-
-
+        // close the pipe
         close(pipefd[0]);
         close(statuscode[0]);
-
     }
     else    //Failed to fork
     {
@@ -451,7 +436,7 @@ int main(int argc, char *argv[])
             parsehttp(buffer, method, uri, queryString, version); //Method, uri, version: will be intialized (GET /Request /HTTP1.1)
 
             //If the str not contain a . (Meaning its a directory)
-            if(strchr(uri, '.') == NULL)
+            if((strchr(uri, '.') == NULL) && ststr(uri, "my-histogram") == NULL)
                 requestrDirLst(clientfd, uri); //Sending (/response)
             else
             {
@@ -477,7 +462,10 @@ int main(int argc, char *argv[])
                     sprintf(file_path, ".%s", uri);  // Assuming the uri is a path relative to the current directory
                     execute_CGI_script(clientfd, file_path, queryString);
                 }
-                else{
+                else if (strstr(uri, "my-histogram") != NULL) {
+                    execute_my_histogram(clientfd, queryString);
+                }
+                else {
                     char notFound [] = "HTTP/1.1 501 Not Found\r\n"
                                    "Content-Type: text/html; charset=UTF-8\r\n"
                                    "\r\n"
