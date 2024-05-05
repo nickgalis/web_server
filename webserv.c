@@ -8,6 +8,8 @@
 #include <dirent.h>
 #include <sys/wait.h>
 #include "cache.h"
+#include <getopt.h>
+
 
 
 
@@ -242,8 +244,11 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
 
     FILE* file = fopen(fullpath, "r");
     if (!file) {
-        perror("fopen");
-        return;
+         char notFound [] = "HTTP/1.1 404 Not Found\r\n"
+                           "Content-Type: text/html; charset=UTF-8\r\n"
+                           "\r\n"
+                           "<h1>404 CGI File Not Found</h1>";
+        write(clientfd, notFound, strlen(notFound));
     }
     char line[1024];
     int contains_my_histogram = 0;
@@ -471,6 +476,13 @@ int main(int argc, char *argv[])
                     char file_path[MAX_BUF_SIZE];
                     sprintf(file_path, ".%s", uri);  // Assuming the uri is a path relative to the current directory
                     execute_CGI_script(clientfd, file_path, queryString);
+                }
+                else{
+                    char notFound [] = "HTTP/1.1 501 Not Found\r\n"
+                                   "Content-Type: text/html; charset=UTF-8\r\n"
+                                   "\r\n"
+                                   "<h1>501 Functionality not Supported</h1>";
+                    write(clientfd, notFound, strlen(notFound));
                 }
             }
 
