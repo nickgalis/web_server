@@ -232,45 +232,6 @@ char* get_query_param(const char* queryString, const char* key) {
 }
 
 
-void execute_my_histogram(int clientfd, char* queryString) {
-    int pipefd[2];
-    pipe(pipefd); // Create a pipe for communication between my-histogram and pretty_print.cgi
-
-    // First fork to run the my-histogram program
-    pid_t pid1 = fork();
-    if(pid1 == 0) {
-        // Child process
-        close(pipefd[0]); // Close unused read end
-        dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to pipe
-
-        char* directory = get_query_param(queryString, "directory");
-        execl("./my-histogram", "./my-histogram", directory, (char *) NULL);
-        // If execl returns at all, an error occurred.
-        perror("execl");
-        _exit(1);
-    }
-
-    // Second fork to run the pretty_print.cgi program
-    pid_t pid2 = fork();
-    if(pid2 == 0) {
-        // Child process
-        close(pipefd[1]); // Close unused write end
-        dup2(pipefd[0], STDIN_FILENO); // Redirect stdin to pipe
-        dup2(clientfd, STDOUT_FILENO); // Redirect stdout to clientfd
-
-        execl("/usr/bin/python3", "/usr/bin/python3", "./pretty_print.cgi", NULL);
-        // If execl returns at all, an error occurred.
-        perror("execl");
-        _exit(1);
-    }
-
-    // Parent process - close unused file descriptors and wait for children
-    close(pipefd[0]);
-    close(pipefd[1]);
-    waitpid(pid1, NULL, 0); // Wait for first child to finish
-    waitpid(pid2, NULL, 0); // Wait for second child to finish
-}
-
 void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
     int pipefd[2];
     int statuscode[2];
@@ -344,6 +305,33 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
     {
         perror("fork");
         return;
+    }
+}
+
+
+void execute_my_histogram(int clientfd, char* queryString) {
+    char *directory = get_query_param(queryString, "directory");
+    
+    printf("%s", directory);
+
+    // Run the my-histogram program and wait for it to finish
+    pid_t pid1 = fork();
+    if (pid1 == 0) { // Child process
+        execl("./my-histogram", "./my-histogram", directory, (char *) NULL);
+        perror("execl"); // If execl returns at all, an error occurred
+        _exit(1);
+    } else if (pid1 > 0){ // Parent process
+        int status;
+        waitpid(pid1, &status, 0); // Wait for child to finish
+
+        // After my-histogram is done, run pretty_print.cgi
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            char fullpath[MAX_BUF_SIZE];
+            sprintf(fullpath, "./pretty_print.cgi");
+            execute_CGI_script(clientfd, fullpath, queryString);
+        }
+    } else {
+        perror("fork");
     }
 }
 
@@ -467,9 +455,9 @@ int main(int argc, char *argv[])
                 }
                 else {
                     char notFound [] = "HTTP/1.1 501 Not Found\r\n"
-                                   "Content-Type: text/html; charset=UTF-8\r\n"
-                                   "\r\n"
-                                   "<h1>501 Functionality not Supported</h1>";
+                                       "Content-Type: text/html; charset=UTF-8\r\n"
+                                       "\r\n"
+                                       "<h1>501 Functionality not Supported</h1>";
                     write(clientfd, notFound, strlen(notFound));
                 }
             }
