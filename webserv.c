@@ -437,7 +437,7 @@ int main(int argc, char *argv[])
                 requestrDirLst(clientfd, uri); //Sending (/response)
             else
             {
-                if(strstr(uri, ".jpg") != NULL || strstr(uri, ".jpeg") != NULL) {
+                if((strchr(uri, '.') == NULL) && strstr(uri, "my-histogram") == NULL && (strstr(uri, "betaflight") == NULL)) {
                     char file_path[MAX_BUF_SIZE];
                     sprintf(file_path, ".%s", uri);
                     handle_image_request(clientfd, file_path, "image/jpeg");
