@@ -235,7 +235,7 @@ char* get_query_param(const char* queryString, const char* key) {
 void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
     int pipefd[2];
     int statuscode[2];
-    char notValid[0];
+    char notValid[1] = {0}; 
 
     char script_output[MAX_BUF_SIZE];
     memset(script_output, 0, sizeof(script_output));
@@ -339,11 +339,6 @@ void execute_my_histogram(int clientfd, char* queryString) {
     
 }
 
-void execute_betaflight() {
-    system("/home/nickgalis/\'Betaflight Configurator\'/betaflight-configurator");
-}
-
-
 int main(int argc, char *argv[])
 {
     with_caching = 0; //default to no caching
@@ -437,7 +432,7 @@ int main(int argc, char *argv[])
                 requestrDirLst(clientfd, uri); //Sending (/response)
             else
             {
-                if((strchr(uri, '.') == NULL) && strstr(uri, "my-histogram") == NULL && (strstr(uri, "betaflight") == NULL)) {
+                if(strstr(uri, ".jpg") != NULL || strstr(uri, ".jpeg") != NULL) {
                     char file_path[MAX_BUF_SIZE];
                     sprintf(file_path, ".%s", uri);
                     handle_image_request(clientfd, file_path, "image/jpeg");
@@ -461,9 +456,6 @@ int main(int argc, char *argv[])
                 }
                 else if (strstr(uri, "my-histogram") != NULL) {
                     execute_my_histogram(clientfd, queryString);
-                }
-                else if (strstr(uri, "betaflight") != NULL) {
-                    execute_betaflight();
                 }
                 else {
                     char notFound [] = "HTTP/1.1 501 Not Found\r\n"
