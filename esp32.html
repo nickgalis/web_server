@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ESP32 Control Interface</title>
+</head>
+<body>
+<h1>Control ESP32 LED</h1>
+<button onclick="sendCommand('on')">Start Blinking</button>
+<button onclick="sendCommand('off')">Stop Blinking</button>
+
+<script>
+function sendCommand(command) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+            console.log('Response:', this.responseText);
+        }
+    };
+    xhttp.open("GET", "http://10.192.55.71/2/" + command, true);
+    xhttp.send();
+}
+</script>
+</body>
+</html>
+

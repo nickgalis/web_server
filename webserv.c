@@ -13,7 +13,7 @@
 
 
 
-#define MAX_BUF_SIZE 512 //d_name 256 so had to do 512
+#define MAX_BUF_SIZE 1000 //d_name 256 so had to do 512
 #define HTML_BUF_SIZE 10000
 /*
 Socket is created
@@ -250,10 +250,11 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
         perror("pipe");
         return;
     }
-
+    
     pid_t pid = fork();
     if(pid == 0)        //Child Process
     {
+       
         // Redirect stdout to the pipe
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[0]);
@@ -278,7 +279,9 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
     }
     else if(pid > 0)    //Parent Process
     {
-        wait(NULL); //Force Child process to execute first
+        
+        waitpid(pid, NULL, 0); //Force Child process to execute first
+    
 
         close(pipefd[1]);
         close(statuscode[1]);
@@ -306,13 +309,14 @@ void execute_CGI_script(int clientfd, char* fullpath, char* queryString) {
         perror("fork");
         return;
     }
+
+   
 }
 
 
 void execute_my_histogram(int clientfd, char* queryString) {
     char *directory = get_query_param(queryString, "directory");
-    
-    printf("%s", directory);
+
 
     // Run the my-histogram program and wait for it to finish
     pid_t pid1 = fork();
@@ -323,7 +327,6 @@ void execute_my_histogram(int clientfd, char* queryString) {
     } else if (pid1 > 0){ // Parent process
         int status;
         waitpid(pid1, &status, 0); // Wait for child to finish
-
         // After my-histogram is done, run pretty_print.cgi
         if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
             char fullpath[MAX_BUF_SIZE];
@@ -333,6 +336,7 @@ void execute_my_histogram(int clientfd, char* queryString) {
     } else {
         perror("fork");
     }
+    
 }
 
 int main(int argc, char *argv[])

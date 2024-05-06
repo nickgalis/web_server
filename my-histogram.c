@@ -29,7 +29,7 @@ void makeGNUPlot()
     //yRange can be manually set here: Or remove if max of dataset is not known (gnuplot) will dynamically adjust y axis
     fprintf(gp, "set yrange [0:20]\n");
     fprintf(gp, "plot 'output.txt' using 2:xtic(1) title 'Frequency'"); 
-
+    pclose(gp);
     
 
 }
@@ -81,7 +81,6 @@ int main(int argc, char *argv[])
     int reg = 0, dir = 0, symlink = 0, fifo = 0, socket = 0, block = 0, character = 0; 
     
     /*argv[1] will be taking the directory path (This must be the full path including ./)
-        - To test on terminal (./my-histogram directoryName) 
         - The code that follows does not add ./ so please include it as argv[1] of my-histogram.c
         - output will be a 'histogram.jpeg' 
         - Check 'output.txt' for name value pairs for the file type and count
@@ -89,12 +88,12 @@ int main(int argc, char *argv[])
         - Returns counts have been tested and verfied for everything but (Socket, Block, Character)
     */
     travDir(argv[1], &reg, &dir, &symlink, &fifo, &socket, &block, &character);
-    makeGNUPlot();
+    
 
     FILE *fd = fopen("output.txt", "a");
     if(fd == NULL)
         perror("Error creating output.txt > gnuplot");
-
+    
      
     //Redirecting output to output.txt
     fprintf(fd, "Regular %d\n", reg); 
@@ -105,7 +104,10 @@ int main(int argc, char *argv[])
     fprintf(fd, "Block %d\n", block); 
     fprintf(fd, "Character %d\n", character); 
 
+   
+
     fclose(fd); 
+    makeGNUPlot();
 
 
 }
