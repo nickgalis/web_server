@@ -339,6 +339,11 @@ void execute_my_histogram(int clientfd, char* queryString) {
     
 }
 
+void execute_betaflight() {
+    system("/home/nickgalis/\'Betaflight Configurator\'/betaflight-configurator");
+}
+
+
 int main(int argc, char *argv[])
 {
     with_caching = 0; //default to no caching
@@ -456,6 +461,9 @@ int main(int argc, char *argv[])
                 }
                 else if (strstr(uri, "my-histogram") != NULL) {
                     execute_my_histogram(clientfd, queryString);
+                }
+                else if (strstr(uri, "betaflight") != NULL) {
+                    execute_betaflight();
                 }
                 else {
                     char notFound [] = "HTTP/1.1 501 Not Found\r\n"
